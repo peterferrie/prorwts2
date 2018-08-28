@@ -41,6 +41,7 @@ ver_02 = 1
                                         ;not compatible with allow_subdir, allow_saplings
                 detect_treof = 0        ;detect EOF during read of tree files
                 allow_sparse = 0        ;enable support for reading sparse files
+                                        ;recommended if enable_write is enabled, to prevent writing to sparse blocks
                 bounds_check = 0        ;set to 1 to prevent access beyond the end of the file
                                         ;but limits file size to 64k-2 bytes.
                 no_interrupts= 0        ;set to 1 to disable interrupts across calls
@@ -499,8 +500,6 @@ unrhddblockhi = *
                 lda     #0
 hddreaddir1     jsr     hddreaddirsel
 
-                ;include volume directory header in count
-
 hddreaddir
 hddfirstent     lda     #NAME_LENGTH
                 sta     bloklo
@@ -629,7 +628,7 @@ unrblockhi = unrelocdsk + (* - reloc)
 
                 ;include volume directory header in count
 
-readdir
+readdir         ;note that calling this location directly limits subdirectories to 14 entries!
   !if might_exist = 1 {
                 ldx     dirbuf + FILE_COUNT ;assuming only 256 files per subdirectory
                 inx
@@ -1912,7 +1911,7 @@ hddreaddir1     jsr     hddreaddirsel
 
                 ;include volume directory header in count
 
-hddreaddir
+hddreaddir      ;note that calling this location directly limits subdirectories to 14 entries!
   !if might_exist = 1 {
                 ldx     hdddirbuf + FILE_COUNT ;assuming only 256 files per subdirectory
                 inx

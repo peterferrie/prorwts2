@@ -13,10 +13,10 @@ lda #<file_to_read<br>
 sta namlo<br>
 lda #>file_to_read<br>
 sta namhi<br>
-lda #6 ;bytes
-sta sizelo
-lda #0
-sta sizehi
+lda #6 ;bytes<br>
+sta sizelo<br>
+lda #0<br>
+sta sizehi<br>
 jsr opendir ;open and read file into memory at its load address<br>
 <br>
 ;write to an open file with address override<br>
