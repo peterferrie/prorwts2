@@ -403,7 +403,7 @@ adjpath         tya
                 bne     -
                 ldy     #$ff
                 lda     (bloklo), y
-                bne     -             ;This is always $00, so it does not work with beq. Am I right?
+                beq     - 
 
 set_slot        stx     slot + 2
 !if allow_extend = 1 {
