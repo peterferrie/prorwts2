@@ -274,11 +274,11 @@ init            jsr     SETKBD
                 ldx     $200
                 dex
                 stx     sizelo
-                bmi     +++
 
                 ;find current directory name in directory
 
                 sec
+                bmi     +++   ; When enable_floppy = 1, it moves because it exceeds the range
                 php
 
 readblock       jsr     MLI
@@ -403,7 +403,7 @@ adjpath         tya
                 bne     -
                 ldy     #$ff
                 lda     (bloklo), y
-                beq     -
+                beq     - 
 
 set_slot        stx     slot + 2
 !if allow_extend = 1 {
@@ -1599,7 +1599,7 @@ cmpsecrd        jsr     readadr
 
                 jsr     readd5aa
                 eor     #$ad ;zero A if match
-                bne     cmdsecrd
+                bne     cmpsecrd
 unrread4 = unrelocdsk + (* - reloc)
 -               ldx     Q6L
                 bpl     -
