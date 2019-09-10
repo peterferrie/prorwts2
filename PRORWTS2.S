@@ -390,8 +390,14 @@ adjpath         tya
                 lsr
                 tay
                 ldx     DEVADR01HI, y
+!if (enable_floppy + allow_extend) > 0 {
                 cpx     #$c8
                 bcc     set_slot
+  !if enable_floppy = 1 {
+                lsr
+                ora     #$c0
+                tax
+  } else { ;enable_floppy = 0
                 ldx     #$c8
 -               dex
                 stx     blokhi
@@ -413,6 +419,8 @@ adjpath         tya
                 ldy     #$ff
                 lda     (bloklo), y
                 beq     -
+  } ;enable_floppy
+} ;enable_floppy or allow_extend
 
 set_slot        stx     slot + 2
 !if allow_extend = 1 {
@@ -2948,15 +2956,15 @@ unrentry2 = unrelochdd + (* - reloc)
 
 saveslot
                 lda     #4
-                sta     blokhi
+                sta     $49
                 ldx     #0
-                stx     bloklo
-                sta     unit
+                stx     $48
+                sta     $4a
 --              ldy     #$78
--               lda     (bloklo), y
+-               lda     ($48), y
                 pha
                 lda     scrn_array, x
-initpatch       lda     (bloklo), y
+initpatch       lda     ($48), y
                 pla
                 sta     scrn_array, x
                 inx
@@ -2966,8 +2974,8 @@ initpatch       lda     (bloklo), y
                 bmi     -
                 iny
                 bpl     -
-                inc     blokhi
-                dec     unit
+                inc     $49
+                dec     $4a
                 bne     --
                 rts
 } else { ;swap_scrn = 0
