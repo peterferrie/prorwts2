@@ -261,10 +261,12 @@ init            jsr     SETKBD
   !if allow_multi = 1 {
                 sta     unrdrvoff1 + 1
   } ;allow_multi = 1
-  !if (might_exist + poll_drive) > 0 {
+  !if no_interrupts = 1 {
                 sta     unrdrvoff2 + 1
-  } ;might_exist = 1 or poll_drive = 1
+  } ;no_interrupts = 1
+  !if (might_exist + poll_drive) > 0 {
                 sta     unrdrvoff3 + 1
+  } ;might_exist = 1 or poll_drive = 1
                 tax
                 inx ;MOTORON
   !if allow_multi = 1 {
