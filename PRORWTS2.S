@@ -1738,9 +1738,9 @@ delay
 --              ldx     #$11
 -               dex
                 bne     -
-                inc     tmpsec
+                inc     scratchlo
                 bne     +
-                inc     reqsec
+                inc     scratchhi
 +               sec
                 sbc     #1
                 bne     --
