@@ -261,6 +261,9 @@ init            jsr     SETKBD
                 sta     unrdrvoff1 + 1
   !if no_interrupts = 1 {
                 sta     unrdrvoff2 + 1
+  } else { ;no_interrupts = 0
+                sta     unrdrvoff4 + 1
+                sta     unrdrvoff5 + 1
   } ;no_interrupts = 1
   !if (might_exist + poll_drive) > 0 {
                 sta     unrdrvoff3 + 1
@@ -1554,6 +1557,10 @@ resparse
                 bne     rdwrloop
   } ;aligned_read = 0
 rdwrdone
+  !if no_interrupts = 0 {
+unrdrvoff4 = unrelocdsk + (* - reloc)
+                lda     MOTOROFF
+  } ;no_interrupts = 0
   !if allow_aux = 1 {
                 ldx     #0
 setaux          sta     CLRAUXRD, x
@@ -1637,6 +1644,10 @@ copycache
                 sta     blkoffhi
                 bcc     rdwrdone ;always
     } else { ;one_shot = 1
+      !if no_interrupts = 0 {
+unrdrvoff5 = unrelocdsk + (* - reloc)
+                lda     MOTOROFF
+      } ;no_interrupts = 0
                 rts
     } ;one_shot = 0
   } ;aligned_read = 0
