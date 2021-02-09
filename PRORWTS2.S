@@ -906,6 +906,9 @@ unrblockhi = unrelocdsk + (* - reloc)
                 jsr     readdirsel
 
 readdir
+  !if allow_subdir = 1 {
+                jsr     prepdrive
+  } ;allow_subdir = 1
   !if might_exist = 1 {
                 lda     dirbuf + FILE_COUNT ;assuming only 256 files per subdirectory
                 sta     entries
@@ -1195,6 +1198,7 @@ foundname       iny
 
 rdwrfile
   !if allow_subdir = 1 {
+                jsr     prepdrive
                 clc
   } ;allow_subdir = 1
   !if no_interrupts = 1 {
