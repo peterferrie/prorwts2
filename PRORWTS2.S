@@ -72,11 +72,12 @@ ver_02 = 1
                                         ;uses a one-time open of a tree file, no other file access allowed
                                         ;use unique volume numbers to distinguish between images in the same file
                                         ;requires override_adr, allow_trees, always_trees
+                                        ;or fast_subindex if file is smaller than a tree
                                         ;not compatible with enable_floppy, allow_subdir, might_exist, bounds_check
                 mem_swap     = 0        ;set to 1 if zpage can be swapped between main and aux, and swap_zp is unsuitable
                                         ;(caches index registers in code instead of zpage)
                 load_high    = 0        ;set to 1 to load to top of RAM (either main or banked, enables a himem check)
-                load_aux     = 0        ;load to aux memory, requires either swap_scrn or load_banked
+                load_aux     = 0        ;load to aux memory
                 load_banked  = 1        ;set to 1 to load into banked RAM instead of main RAM (can be combined with load_aux for aux banked)
                 lc_bank      = 1        ;load into specified bank (1 or 2) if load_banked=1
                 one_page     = 0        ;set to 1 if verbose mode says that you should (smaller code)
@@ -744,6 +745,9 @@ multicopy
                 dex
                 bne     multicopy
   } ;three_pages = 1
+  !if (fast_subindex + swap_zp) > 1 {
+                sty     zp_array + adrlo - first_zp
+  } ;fast_subindex = 1 and swap_zp = 1
 
   !if swap_scrn = 1 {
                 jsr     saveslot
@@ -819,33 +823,35 @@ hddfoundname    iny
                 sty     zp_array + lastblk - first_zp ;guarantee no match
   } ;swap_zp = 0 or mem_swap = 1
 
-  !if allow_trees = 1 {
+  !if (allow_trees + fast_subindex) > 0 {
                 ;fetch KEY_POINTER
 
                 ldy     #KEY_POINTER
                 lda     (scratchlo), y
-    !if fast_trees = 0 {
+    !if (fast_trees + fast_subindex) = 0 {
       !if ((swap_zp xor 1) + mem_swap) > 0 {
                 sta     treeblklo
       } else { ;swap_zp = 1 and mem_swap = 0
                 sta     zp_array + treeblklo - first_zp
       } ;swap_zp = 0 or mem_swap = 1
-    } else { ;fast_trees = 1
+    } else { ;fast_trees = 1 or fast_subindex = 1
                 tax
     } ;fast_trees = 0
                 iny
                 lda     (scratchlo), y
-    !if fast_trees = 0 {
+    !if (fast_trees + fast_subindex) = 0 {
       !if ((swap_zp xor 1) + mem_swap) > 0 {
                 sta     treeblkhi
       } else { ;swap_zp = 1 and mem_swap = 0
                 sta     zp_array + treeblkhi - first_zp
       } ;swap_zp = 0 or mem_swap = 1
-    } else { ;fast_trees = 1
+    } else { ;fast_trees = 1 or fast_subindex = 1
+      !if fast_trees = 1 {
                 ldy     #>hddtreebuf
+      } ;fast_trees = 1;
                 jsr     hddreaddirsect
     } ;fast_trees = 0
-  } ;allow_trees = 1
+  } ;allow_trees = 1 or fast_subindex = 1
 
                 lda     #>iob
                 ldy     #<iob
