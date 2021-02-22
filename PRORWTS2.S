@@ -263,7 +263,9 @@ init            jsr     SETKBD
                 sta     unrdrvoff2 + 1
   } else { ;no_interrupts = 0
                 sta     unrdrvoff4 + 1
+    !if one_shot = 1 {
                 sta     unrdrvoff5 + 1
+    } ;one_shot = 1
   } ;no_interrupts = 1
   !if (might_exist + poll_drive) > 0 {
                 sta     unrdrvoff3 + 1
@@ -606,11 +608,6 @@ bankram
                 ldx     #>unrelocdsk
                 ldy     #<unrelocdsk
                 plp
-} ;enable_floppy = 1
-!if load_aux = 1 {
-                sta     SETAUXWR + (load_banked * 4) ;SETAUXWR or SETAUXZP
-} ;load_aux = 1
-!if enable_floppy = 1 {
                 php
                 beq     copydrv
                 ldx     #>unrelochdd
@@ -620,8 +617,17 @@ copydrv         stx     scratchhi
                 sty     scratchlo
                 ldx     #>((codeend - rdwrpart) + $ff)
                 ldy     #0
+  !if (load_aux and (load_banked xor 1)) = 1 {
+                sta     SETAUXWR
+  } ;load_aux = 1 and load_banked = 0
 -               lda     (scratchlo), y
+  !if (load_aux + load_banked) > 1 {
+                sta     SETAUXZP
+  } ;load_aux = 1 and load_banked = 1
 reladr          sta     reloc, y
+  !if (load_aux + load_banked) > 1 {
+                sta     CLRAUXZP
+  } ;load_aux = 1 and load_banked = 1
                 iny
                 bne     -
                 inc     scratchhi
@@ -635,6 +641,9 @@ reladr          sta     reloc, y
                 dex
                 bne     -
                 plp
+  !if (load_aux + load_banked) > 1 {
+                sta     SETAUXZP
+  } ;load_aux = 1 and load_banked = 1
   !if swap_scrn = 1 {
                 beq     +
                 jsr     saveslot
@@ -708,6 +717,9 @@ unrdrvoff1      lda     MOTOROFF
                 ldx     #>(hddcodeend + $ff - reloc)
   } ;three_pages = 1
                 ldy     #0
+  !if load_aux = 1 {
+                sta     SETAUXWR + (load_banked * 4) ;SETAUXWR or SETAUXZP
+  } ;load_aux = 1
 multicopy
 -               lda     unrelochdd, y
                 sta     reloc, y
