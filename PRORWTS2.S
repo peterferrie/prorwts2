@@ -76,7 +76,7 @@ ver_02 = 1
                 mem_swap     = 0        ;set to 1 if zpage can be swapped between main and aux, and swap_zp is unsuitable
                                         ;(caches index registers in code instead of zpage)
                 load_high    = 0        ;set to 1 to load to top of RAM (either main or banked, enables a himem check)
-                load_aux     = 0        ;load to aux memory
+                load_aux     = 0        ;load to aux memory, requires either swap_scrn or load_banked
                 load_banked  = 1        ;set to 1 to load into banked RAM instead of main RAM (can be combined with load_aux for aux banked)
                 lc_bank      = 1        ;load into specified bank (1 or 2) if load_banked=1
                 one_page     = 0        ;set to 1 if verbose mode says that you should (smaller code)
@@ -602,13 +602,15 @@ bankram
                 lda     LCBANK2 - ((lc_bank - 1) * 8)
                 lda     LCBANK2 - ((lc_bank - 1) * 8)
 } ;load_banked = 1
-!if load_aux = 1 {
-                sta     SETAUXWR + (load_banked * 4) ;SETAUXWR or SETAUXZP
-} ;load_aux = 1
 !if enable_floppy = 1 {
                 ldx     #>unrelocdsk
                 ldy     #<unrelocdsk
                 plp
+} ;enable_floppy = 1
+!if load_aux = 1 {
+                sta     SETAUXWR + (load_banked * 4) ;SETAUXWR or SETAUXZP
+} ;load_aux = 1
+!if enable_floppy = 1 {
                 php
                 beq     copydrv
                 ldx     #>unrelochdd
@@ -623,7 +625,13 @@ reladr          sta     reloc, y
                 iny
                 bne     -
                 inc     scratchhi
+  !if (load_aux and (load_banked xor 1)) = 1 {
+                sta     CLRAUXWR
+  } ;load_aux = 1 and load_banked = 0
                 inc     reladr + 2
+  !if (load_aux and (load_banked xor 1)) = 1 {
+                sta     SETAUXWR
+  } ;load_aux = 1 and load_banked = 0
                 dex
                 bne     -
                 plp
@@ -679,9 +687,6 @@ unrdrvsel1      lda     DRV0EN + 1
                 sta     phase
                 ldx     #$22
                 jsr     seek
-                jsr     readadr
-                lda     curtrk
-                sta     trackd2
 +               inc     driveind + 1
   } ;allow_multi = 1
 unrdrvoff1      lda     MOTOROFF
@@ -716,8 +721,14 @@ multicopy
                 iny
                 bne     -
   !if three_pages = 1 {
+    !if (load_aux and (load_banked xor 1)) = 1 {
+                sta     CLRAUXWR
+    } ;load_aux = 1 and load_banked = 0
                 inc     multicopy + 2
                 inc     multicopy + 5
+    !if (load_aux and (load_banked xor 1)) = 1 {
+                sta     SETAUXWR
+    } ;load_aux = 1 and load_banked = 0
                 dex
                 bne     multicopy
   } ;three_pages = 1
