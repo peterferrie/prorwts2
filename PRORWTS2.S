@@ -24,6 +24,7 @@ ver_02 = 1
                 aligned_read = 0        ;set to 1 if all reads can be a multiple of block size (required for RWTS mode)
                 enable_readseq=0        ;set to 1 to enable reading multiple sequential times from the same file without seek
                                         ;(exposes a fixed address that can be called for either floppy or hard disk support)
+                                        ;requires fast_subindex
                 enable_write = 0        ;set to 1 to enable write support
                                         ;file must exist already and its size cannot be altered
                                         ;writes occur in multiples of block size
@@ -959,7 +960,6 @@ nextent         ldy     #0
   !if (might_exist + allow_subdir + allow_saplings + (allow_trees xor always_trees)) > 0 {
                 lda     (scratchlo), y
     !if might_exist = 1 {
-                sty     status
 
                 ;skip deleted entries without counting
 
@@ -1226,8 +1226,12 @@ foundname       iny
                 jmp     rdwrfilei
 
 rdwrfile
+  !if allow_multi = 1 {
+                ldy     driveind + 1
+  } ;allow_multi = 1
+                jsr     prepdrivei
+
   !if allow_subdir = 1 {
-                jsr     prepdrive
                 clc
   } ;allow_subdir = 1
   !if no_interrupts = 1 {
@@ -1250,11 +1254,6 @@ unrdrvoff3 = unrelocdsk + (* - reloc)
                 rts
 +
   } ;no_interrupts = 1
-
-  !if allow_multi = 1 {
-                ldy     driveind + 1
-  } ;allow_multi = 1
-                jsr     prepdrivei
 
 rdwrfilei
   !if (override_adr + allow_subdir + allow_saplings + allow_trees + (aligned_read xor 1)) > 0 {
@@ -1685,46 +1684,6 @@ unrdrvoff5 = unrelocdsk + (* - reloc)
     } ;one_shot = 0
   } ;aligned_read = 0
 
-prepdrive
-  !if allow_multi = 1 {
-                ldy     #0
-  } ;allow_multi = 1
-prepdrivei
-                jsr     poll
-                php
-
-unrdrvon2 = unrelocdsk + (* - reloc)
-                lda     MOTORON
-  !if allow_multi = 1 {
-                asl     reqcmd
-                bcc     seldrive
-twodrives       nop                     ;replace with INY if drive exists
-seldrive        lsr     reqcmd
-unrdrvsel2 = unrelocdsk + (* - reloc)
-                lda     DRV0EN, y
-                cpy     driveind + 1
-                beq     nodelay
-                sty     driveind + 1
-                plp
-                ldy     #0
-                php
-
-nodelay
-  } ;allow_multi = 1
-                plp
-                bne     +
-                jsr     spinup
-+
-  !if poll_drive = 1 {
-                jsr     poll
-                bne     +
-                pla
-                pla
-                jmp     nodisk
-+
-  } ;poll_drive = 1
-                rts
-
                 ;no tricks here, just the regular stuff
 
 seek            ldy     #0
@@ -1773,6 +1732,63 @@ unrseek = unrelocdsk + (* - reloc)
                 lda     PHASEOFF, x
                 rts
 
+prepdrive       ldy     #0
+prepdrivei
+  !if allow_multi = 1 {
+                lda     #0              ;not TYA because LDY #0 might be skipped
+  } ;allow_multi = 1
+  !if might_exist = 1 {
+                sta     status
+  } ;might_exist = 1
+  !if allow_multi = 1 {
+                asl     reqcmd
+                bcc     seldrive
+twodrives       nop                     ;replace with INY if drive exists
+seldrive        lsr     reqcmd
+driveind        cpy     #0
+                sty     driveind + 1
+                clc
+                bne     newdrive
+  } ;allow_multi = 1
+                jsr     poll
+  !if allow_multi = 1 {
+                cpx     #1
+  } ;allow_multi = 1
+
+newdrive
+unrdrvon2 = unrelocdsk + (* - reloc)
+                sta     MOTORON
+
+  !if allow_multi = 1 {
+unrdrvsel2 = unrelocdsk + (* - reloc)
+                sta     DRV0EN, y
+    !if poll_drive = 0 {
+                bcs     seekret
+
+                ;else fall through to spinup
+    } else { ;poll_drive = 1
+                bcs     +
+                jsr     spinup
+    } ;poll_drive = 0
+  } else { ;allow_multi = 0
+    !if poll_drive = 0 {
+                bne     seekret
+
+                ;else fall through to spinup
+    } else { ;poll_drive = 1
+                bne     +
+                jsr     spinup
+    } ;poll_drive = 0
+  } ;allow_multi = 1
++
+  !if poll_drive = 1 {
+                jsr     readd5aa
+                bcs     seekret
+                pla
+                pla
+                jmp     nodisk
+  } ;poll_drive = 1
+
 spinup          ldy     #6
 -               jsr     delay
                 dey
@@ -1809,7 +1825,16 @@ readadr
 seekret         rts
 
 readd5aa
---              jsr     readnib
+  !if poll_drive = 1 {
+                ldx     #0
+                ldy     #0
+  } ;poll_drive = 1
+--
+  !if poll_drive = 1 {
+                inx
+                beq     +
+  } ;poll_drive = 1
+---             jsr     readnib
 -               cmp     #$d5
                 bne     --
                 jsr     readnib
@@ -1822,6 +1847,13 @@ unrread1 = unrelocdsk + (* - reloc)
 -               lda     Q6L
                 bpl     -
                 rts
+
+  !if poll_drive = 1 {
++               iny
+                bne     ---
+                clc
+                rts
+  } ;poll_drive = 1
 
 poll            ldx     #0
 unrread2 = unrelocdsk + (* - reloc)
