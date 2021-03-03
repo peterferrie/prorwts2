@@ -1226,11 +1226,6 @@ foundname       iny
                 jmp     rdwrfilei
 
 rdwrfile
-  !if allow_multi = 1 {
-                ldy     driveind + 1
-  } ;allow_multi = 1
-                jsr     prepdrivei
-
   !if allow_subdir = 1 {
                 clc
   } ;allow_subdir = 1
@@ -1254,6 +1249,11 @@ unrdrvoff3 = unrelocdsk + (* - reloc)
                 rts
 +
   } ;no_interrupts = 1
+
+  !if allow_multi = 1 {
+                ldy     driveind + 1
+  } ;allow_multi = 1
+                jsr     prepdrivei
 
 rdwrfilei
   !if (override_adr + allow_subdir + allow_saplings + allow_trees + (aligned_read xor 1)) > 0 {
@@ -1915,7 +1915,7 @@ seekrdwr
                 sta     reqsec
 
   !if allow_multi = 1 {
-driveind        ldy     #0
+                ldy     driveind + 1
                 ldx     trackd1, y
   } else { ;allow_multi = 0
 trackd1 = * + 1
