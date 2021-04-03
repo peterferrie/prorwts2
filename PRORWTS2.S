@@ -25,6 +25,7 @@ ver_02 = 1
                 enable_readseq=0        ;set to 1 to enable reading multiple sequential times from the same file without seek
                                         ;(exposes a fixed address that can be called for either floppy or hard disk support)
                                         ;requires fast_subindex
+                                        ;can also be used for sequential writes, but size must be 512-aligned
                 enable_write = 0        ;set to 1 to enable write support
                                         ;file must exist already and its size cannot be altered
                                         ;writes occur in multiples of block size
@@ -77,6 +78,7 @@ ver_02 = 1
                                         ;not compatible with enable_floppy, allow_subdir, might_exist, bounds_check
                 mem_swap     = 0        ;set to 1 if zpage can be swapped between main and aux, and swap_zp is unsuitable
                                         ;(caches index registers in code instead of zpage)
+                write_ffff   = 0        ;set to 1 if there might be reads to $FFxx and allow_sparse=1
                 load_high    = 0        ;set to 1 to load to top of RAM (either main or banked, enables a himem check)
                 load_aux     = 0        ;load to aux memory
                 load_banked  = 1        ;set to 1 to load into banked RAM instead of main RAM (can be combined with load_aux for aux banked)
@@ -837,7 +839,7 @@ hddfoundname    iny
       } ;swap_zp = 0 or mem_swap = 1
     } else { ;fast_trees = 1 or fast_subindex = 1
                 tax
-    } ;fast_trees = 0
+    } ;fast_trees = 0 and fast_subindex = 0
                 iny
                 lda     (scratchlo), y
     !if (fast_trees + fast_subindex) = 0 {
@@ -851,7 +853,7 @@ hddfoundname    iny
                 ldy     #>hddtreebuf
       } ;fast_trees = 1;
                 jsr     hddreaddirsect
-    } ;fast_trees = 0
+    } ;fast_trees = 0 and fast_subindex = 0
   } ;allow_trees = 1 or fast_subindex = 1
 
                 lda     #>iob
@@ -1175,8 +1177,8 @@ foundname       iny
                 sta     treeblkhi
     } ;allow_trees = 1 and fast_trees = 0
 
-    !if (allow_saplings + write_sparse) > 1 {
-                ;clear dirbuf in case sparse sapling becomes seedling
+    !if (allow_saplings + allow_sparse) > 1 {
+                ;clear dirbuf in case sparse seedling is sapling-sized
 
                 pha
                 ldy     #1
@@ -1186,7 +1188,7 @@ foundname       iny
                 iny
                 bne     -
                 pla
-    } ;allow_saplings = 1 and write_sparse = 1
+    } ;allow_saplings = 1 and allow_sparse = 1
 
     !if always_trees = 0 {
                 plp
@@ -1609,8 +1611,12 @@ issparse
 -               sta     (adrlo), y
                 iny
                 bne     -
-                dec     adrhi
+                inc     adrhi
+    if write_ffff = 0 {
                 bne     resparse
+    } else {
+                jmp     resparse
+    } ;write_ffff
   } ;allow_sparse = 1
 
   !if aligned_read = 0 {
@@ -2794,8 +2800,8 @@ hddfoundname    iny
                 sta     treeblkhi
     } ;allow_trees = 1 and fast_trees = 0
 
-    !if (allow_saplings + write_sparse) > 1 {
-                ;clear dirbuf in case sparse sapling becomes seedling
+    !if (allow_saplings + allow_sparse) > 1 {
+                ;clear dirbuf in case sparse seedling is sapling-sized
 
                 pha
                 ldy     #1
@@ -2805,7 +2811,7 @@ hddfoundname    iny
                 iny
                 bne     -
                 pla
-    } ;allow_saplings = 1 and write_sparse = 1
+    } ;allow_saplings = 1 and allow_sparse = 1
 
     !if always_trees = 0 {
                 plp
