@@ -117,12 +117,9 @@ ver_02 = 1
                 ;zpage usage, arbitrary selection except for the "ProDOS constant" ones
                 ;feel free to move them around
 
-!if (might_exist + poll_drive) > 0 {
+!if (might_exist + poll_drive + detect_wp) > 0 {
                 status    = $50         ;returns non-zero on error
-} ;might_exist = 1 or poll_drive = 1
-!if write_sparse = 1 {
-                sparseblk  = $50        ;(internal) last-read block was sparse if zero
-} ;write_sparse = 1
+} ;might_exist = 1 or poll_drive = 1 or detect_wp = 1
 !if allow_aux = 1 {
                 auxreq    = $51         ;set to 1 to read/write aux memory, else main memory is used
 } ;allow_aux = 1
@@ -138,6 +135,10 @@ ver_02 = 1
                 namlo     = $57         ;name of file to access
                 namhi     = $58         ;name of file to access
                 !set last_zp = $58      ;highest address to save if swap_zp enabled (max 127 entries later)
+!if write_sparse = 1 {
+                sparseblk  = $59        ;(internal) last-read block was sparse if zero
+                !set last_zp = $59      ;highest address to save if swap_zp enabled (max 127 entries later)
+} ;write_sparse = 1
 
 !if enable_floppy = 1 {
                 tmpsec    = $3c         ;(internal) sector number read from disk
@@ -162,44 +163,44 @@ ver_02 = 1
 
 !if mem_swap = 0 {
   !if rwts_mode = 1 {
-                lasttree  = $59         ;(internal) last used index in tree buffer
+                lasttree  = $5a         ;(internal) last used index in tree buffer
   } ;rwts_mode = 1
   !if allow_trees = 1 {
-                treeidx   = $5a         ;(internal) index into tree block
-                !set last_zp = $5a      ;highest address to save if swap_zp enabled (max 127 entries later)
+                treeidx   = $5b         ;(internal) index into tree block
+                !set last_zp = $5b      ;highest address to save if swap_zp enabled (max 127 entries later)
     !if always_trees = 0 {
-                istree    = $5b         ;(internal) flag to indicate tree file
+                istree    = $5c         ;(internal) flag to indicate tree file
     } ;always_trees = 0
     !if fast_trees = 0 {
-                treeblklo = $5c
-                treeblkhi = $5d
-                !set last_zp = $5d      ;highest address to save if swap_zp enabled (max 127 entries later)
+                treeblklo = $5d
+                treeblkhi = $5e
+                !set last_zp = $5e      ;highest address to save if swap_zp enabled (max 127 entries later)
     } ;fast_trees = 0
   } ;allow_trees = 1
-                blkidx    = $5e         ;(internal) index into sapling block list
+                blkidx    = $5f         ;(internal) index into sapling block list
   !if rwts_mode = 1 {
-                lastblk   = $5f         ;(internal) previous index into sapling block list
-                !set last_zp = $5f      ;highest address to save if swap_zp enabled (max 127 entries later)
+                lastblk   = $60         ;(internal) previous index into sapling block list
+                !set last_zp = $60      ;highest address to save if swap_zp enabled (max 127 entries later)
   } ;rwts_mode = 1
   !if ((bounds_check or return_size) > 0) and ((rwts_mode or one_shot) = 0) {
-                bleftlo   = $60         ;(internal) bytes left in file
+                bleftlo   = $61         ;(internal) bytes left in file
   } ;(bounds_check = 1 or return_size = 1) and (rwts_mode = 0 and one_shot = 0)
   !if ((bounds_check or return_size or aligned_read) > 0) and ((rwts_mode or one_shot) = 0) {
-                blefthi   = $61         ;(internal) bytes left in file
-                !set last_zp = $61      ;highest address to save if swap_zp enabled (max 127 entries later)
+                blefthi   = $62         ;(internal) bytes left in file
+                !set last_zp = $62      ;highest address to save if swap_zp enabled (max 127 entries later)
   } ;(bounds_check = 1 or return_size = 1 or aligned_read = 1) and (rwts_mode and one_shot = 0)
   !if aligned_read = 0 {
-                blkofflo  = $62         ;(internal) offset within cache block
-                blkoffhi  = $63         ;(internal) offset within cache block
-                !set last_zp = $63      ;highest address to save if swap_zp enabled (max 127 entries later)
+                blkofflo  = $63         ;(internal) offset within cache block
+                blkoffhi  = $64         ;(internal) offset within cache block
+                !set last_zp = $64      ;highest address to save if swap_zp enabled (max 127 entries later)
   } ;aligned_read = 0
 } ;mem_swap = 0
 
 !if enable_floppy = 1 {
-                step      = $64         ;(internal) state for stepper motor
-                tmptrk    = $65         ;(internal) temporary copy of current track
-                phase     = $66         ;(internal) current phase for seek
-                !set last_zp = $66      ;highest address to save if swap_zp enabled (max 127 entries later)
+                step      = $65         ;(internal) state for stepper motor
+                tmptrk    = $66         ;(internal) temporary copy of current track
+                phase     = $67         ;(internal) current phase for seek
+                !set last_zp = $67      ;highest address to save if swap_zp enabled (max 127 entries later)
 } ;enable_floppy = 1
 
                 ;constants
@@ -409,25 +410,24 @@ adjpath         tya
                 pla
 
                 ;unit to slot for ProDOS interface
+                ;accept if slot code matches unit number
 
 +++             pla
                 lsr
                 lsr
                 lsr
                 tay
-                ldx     DEVADR01HI, y
-                cpx     #$c1
-                bcc     +
-                cpx     #$c8
-                bcc     set_slot
-+
+                lsr
+                ora     #$c0
+                tax
+                cmp     DEVADR01HI, y
+                clc
+                beq     set_slot
+
 !if enable_floppy = 1 {
 
                 ;check if current device is floppy
 
-                lsr
-                ora     #$c0
-                tax
                 stx     scratchhi
                 ldy     #0
                 sty     scratchlo
@@ -452,7 +452,10 @@ not_floppy
 } ;enable_floppy = 1
                 ldx     #$c8
 
-                ;find SmartPort device for basic MicroDrive support
+                ;find SmartPort device for basic MicroDrive, BOOTi support
+                ;the BOOTi can load floppy .po images via the SmartPort interface
+                ;but the virtual slot behaviour differs slightly from regular ProDOS
+                ;so we scan for the SmartPort interface in all cases
 
 -               dex
                 stx     scratchhi
@@ -1739,14 +1742,19 @@ unrseek = unrelocdsk + (* - reloc)
                 lda     PHASEOFF, x
                 rts
 
-prepdrive       ldy     #0
-prepdrivei
+prepdrive
   !if allow_multi = 1 {
-                lda     #0              ;not TYA because LDY #0 might be skipped
+                ldy     #0
   } ;allow_multi = 1
-  !if might_exist = 1 {
+prepdrivei
+  !if (might_exist + poll_drive + detect_wp) > 0 {
+    !if ver_02 = 1 {
+                lda     #0              ;not TYA because LDY #0 might be skipped
                 sta     status
-  } ;might_exist = 1
+    } else { ;ver_02 = 0
+                stz     status
+    } ;ver_02 = 1
+  } ;might_exist = 1 or poll_drive = 1 or detect_wp = 1
   !if allow_multi = 1 {
                 asl     reqcmd
                 bcc     seldrive
@@ -1879,14 +1887,8 @@ readdirsel
   !if (ver_02 + allow_multi) > 0 {
                 ldy     #0
                 sty     adrlo
-    !if poll_drive = 1 {
-                sty     status
-    } ;poll_drive = 1
   } else { ;ver_02 = 0 and allow_multi = 0
                 stz     adrlo
-    !if poll_drive = 1 {
-                stz     status
-    } ;poll_drive = 1
   } ;ver_02 = 1 or allow_multi = 1
 
 readdirsec
@@ -3469,14 +3471,8 @@ hddreaddirsel
 !if ver_02 = 1 {
                 ldy     #0
                 sty     adrlo
-  !if might_exist = 1 {
-                sty     status
-  } ;might_exist = 1
 } else { ;ver_02 = 0
                 stz     adrlo
-  !if might_exist = 1 {
-                stz     status
-  } ;might_exist = 1
 } ;ver_02 = 1
 
 !if (enable_floppy + allow_multi) > 1 {
