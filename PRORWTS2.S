@@ -267,9 +267,9 @@ init            jsr     SETKBD
                 sta     unrdrvoff2 + 1
   } else { ;no_interrupts = 0
                 sta     unrdrvoff4 + 1
-    !if one_shot = 1 {
+    !if ((aligned_read xor 1) and one_shot) = 1 {
                 sta     unrdrvoff5 + 1
-    } ;one_shot = 1
+    } ;aligned_read = 0 and one_shot = 1
   } ;no_interrupts = 1
   !if (might_exist + poll_drive) > 0 {
                 sta     unrdrvoff3 + 1
@@ -448,8 +448,9 @@ adjpath         tya
                 lda     (scratchlo), y
                 beq     set_slot
 
-not_floppy      inx
+not_floppy
 } ;enable_floppy = 1
+                ldx     #$c8
 
                 ;find SmartPort device for basic MicroDrive support
 
@@ -1612,7 +1613,7 @@ issparse
                 iny
                 bne     -
                 inc     adrhi
-    if write_ffff = 0 {
+    !if write_ffff = 0 {
                 bne     resparse
     } else {
                 jmp     resparse
