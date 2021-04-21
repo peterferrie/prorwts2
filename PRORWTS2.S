@@ -1,6 +1,6 @@
 ;license:BSD-3-Clause
 ;extended open/read/write binary file in ProDOS filesystem, with random access
-;copyright (c) Peter Ferrie 2013-2020
+;copyright (c) Peter Ferrie 2013-2021
 ;assemble using ACME
 
 ver_02 = 1
@@ -281,12 +281,11 @@ init            jsr     SETKBD
                 stx     unrdrvon2 + 1
                 inx ;DRV0EN
   !if allow_multi = 1 {
+                stx     unrdrvsel1 + 1
                 stx     unrdrvsel2 + 1
+                stx     unrdrvsel3 + 1
   } ;allow_multi = 1
                 inx
-  !if allow_multi = 1 {
-                stx     unrdrvsel1 + 1
-  } ;allow_multi = 1
                 inx ;Q6L
                 stx     unrread1 + 1
                 stx     unrread2 + 1
@@ -694,17 +693,26 @@ unrdrvon1       lda     MOTORON
                 sta     trackd1
 
   !if allow_multi = 1 {
-unrdrvsel1      lda     DRV0EN + 1
+                lda     unrunit1 + 1
+                asl
+                lda     #0
+                rol
+                sta     driveind + 1
+                pha
+                eor     #1
+                tay
+unrdrvsel1      lda     DRV0EN, y
                 jsr     spinup
                 jsr     poll
                 beq     +
-                lda     #$c8 ;iny
-                sta     twodrives
+                inc     twodrives + 1
                 lda     #0
                 sta     phase
                 ldx     #$22
                 jsr     seek
-+               inc     driveind + 1
++               pla
+                tay
+unrdrvsel2      lda     DRV0EN, y
   } ;allow_multi = 1
 unrdrvoff1      lda     MOTOROFF
 ++
@@ -1015,6 +1023,9 @@ nextent         ldy     #0
   } ;might_exist = 1
   !if (might_exist + poll_drive) > 0 {
 nodisk          inc     status
+    !if detect_err = 1 {
+                sec
+    } ;detect_err = 1
     !if no_interrupts = 0 {
 unrdrvoff3 = unrelocdsk + (* - reloc)
                 lda     MOTOROFF
@@ -1256,10 +1267,7 @@ unrdrvoff3 = unrelocdsk + (* - reloc)
 +
   } ;no_interrupts = 1
 
-  !if allow_multi = 1 {
-                ldy     driveind + 1
-  } ;allow_multi = 1
-                jsr     prepdrivei
+                jsr     prepdrive
 
 rdwrfilei
   !if (override_adr + allow_subdir + allow_saplings + allow_trees + (aligned_read xor 1)) > 0 {
@@ -1743,13 +1751,16 @@ unrseek = unrelocdsk + (* - reloc)
                 rts
 
 prepdrive
+  !if poll_drive = 1 {
+                tsx
+                stx     callstack + 1
+  } ;poll_drive = 1
   !if allow_multi = 1 {
-                ldy     #0
+                ldy     driveind + 1
   } ;allow_multi = 1
-prepdrivei
   !if (might_exist + poll_drive + detect_wp) > 0 {
     !if ver_02 = 1 {
-                lda     #0              ;not TYA because LDY #0 might be skipped
+                lda     #0
                 sta     status
     } else { ;ver_02 = 0
                 stz     status
@@ -1758,7 +1769,9 @@ prepdrivei
   !if allow_multi = 1 {
                 asl     reqcmd
                 bcc     seldrive
-twodrives       nop                     ;replace with INY if drive exists
+                tya
+twodrives       eor     #0              ;replaced with 1 if drive exists
+                tay
 seldrive        lsr     reqcmd
 driveind        cpy     #0
                 sty     driveind + 1
@@ -1775,34 +1788,10 @@ unrdrvon2 = unrelocdsk + (* - reloc)
                 sta     MOTORON
 
   !if allow_multi = 1 {
-unrdrvsel2 = unrelocdsk + (* - reloc)
+unrdrvsel3 = unrelocdsk + (* - reloc)
                 sta     DRV0EN, y
-    !if poll_drive = 0 {
                 bcs     seekret
-
-                ;else fall through to spinup
-    } else { ;poll_drive = 1
-                bcs     +
-                jsr     spinup
-    } ;poll_drive = 0
-  } else { ;allow_multi = 0
-    !if poll_drive = 0 {
-                bne     seekret
-
-                ;else fall through to spinup
-    } else { ;poll_drive = 1
-                bne     +
-                jsr     spinup
-    } ;poll_drive = 0
   } ;allow_multi = 1
-+
-  !if poll_drive = 1 {
-                jsr     readd5aa
-                bcs     seekret
-                pla
-                pla
-                jmp     nodisk
-  } ;poll_drive = 1
 
 spinup          ldy     #6
 -               jsr     delay
@@ -1855,7 +1844,6 @@ readd5aa
                 jsr     readnib
                 cmp     #$aa
                 bne     -
-                tay ;we need Y=#$AA later
 
 readnib
 unrread1 = unrelocdsk + (* - reloc)
@@ -1866,8 +1854,12 @@ unrread1 = unrelocdsk + (* - reloc)
   !if poll_drive = 1 {
 +               iny
                 bne     ---
-                clc
-                rts
+
+callstack       ldx     #0
+                inx
+                inx
+                txs
+                jmp     nodisk
   } ;poll_drive = 1
 
 poll            ldx     #0
@@ -1964,6 +1956,7 @@ cmpsecrd        jsr     readadr
                 jsr     readd5aa
                 eor     #$ad ;zero A if match
                 bne     cmpsecrd
+                ldy     #$aa
 unrread4 = unrelocdsk + (* - reloc)
 -               ldx     Q6L
                 bpl     -
