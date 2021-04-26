@@ -1791,6 +1791,8 @@ unrdrvon2 = unrelocdsk + (* - reloc)
 unrdrvsel3 = unrelocdsk + (* - reloc)
                 sta     DRV0EN, y
                 bcs     seekret
+  } else { ;allow_multi = 0
+                bne     seekret
   } ;allow_multi = 1
 
 spinup          ldy     #6
