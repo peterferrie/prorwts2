@@ -1862,7 +1862,7 @@ callstack       ldx     #0
                 jmp     nodisk
   } ;poll_drive = 1
 
-poll            ldx     #0
+poll            ldx     #$ff
 unrread2 = unrelocdsk + (* - reloc)
 -               lda     Q6L
                 jsr     seekret
