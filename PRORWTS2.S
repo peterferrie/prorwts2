@@ -456,6 +456,7 @@ not_floppy
                 ;but the virtual slot behaviour differs slightly from regular ProDOS
                 ;so we scan for the SmartPort interface in all cases
 
+iterdevice
 -               dex
                 stx     scratchhi
                 ldy     #0
@@ -590,7 +591,10 @@ slot            ldx     $cfff
                 sta     hackstar
 
 iterunit        inc     unrunit2
-                jsr     unrentrysei
+                bne     +
+                ldx     slot + 2
+                jmp     iterdevice
++               jsr     unrentrysei
 
 +               ldy     #$10
 -               lda     readbuff + 3, y
@@ -608,8 +612,8 @@ iterunit        inc     unrunit2
 
 bankram
 !if load_banked = 1 {
-                lda     LCBANK2 - ((lc_bank - 1) * 8)
-                lda     LCBANK2 - ((lc_bank - 1) * 8)
+                lda     LCBANK2 - ((lc_bank - 1) * 8) - (rwts_mode * 2)
+                lda     LCBANK2 - ((lc_bank - 1) * 8) - (rwts_mode * 2)
 } ;load_banked = 1
 !if enable_floppy = 1 {
                 ldx     #>unrelocdsk
@@ -1474,9 +1478,6 @@ rdwrloop
     !if aligned_read = 0 {
                 php
     } ;aligned_read = 0
-                lda     #>dirbuf
-                sta     adrhi
-                sty     adrlo
 
                 ;fetch tree data block and read it
 
@@ -1511,6 +1512,8 @@ noteof1
     } ;detect_treof = 1
 
     !if fast_trees = 0 {
+                lda     #>dirbuf
+                sta     adrhi
                 jsr     seekrd
     } else { ;fast_trees = 1
                 jsr     readdirsel
@@ -1562,16 +1565,8 @@ noteof2
   !if allow_sparse = 1 {
                 pha
                 ora     dirbuf, y
-                tay
-                pla
-                dey
-                iny ;don't affect carry
-  } ;allow_sparse = 1
-  !if aligned_read = 0 {
-                php
-  } ;aligned_read = 0
-  !if allow_sparse = 1 {
                 beq     issparse
+                pla
   } ;allow_sparse = 1
   !if (aligned_read and (enable_write or enable_seek)) = 1 {
                 ldy     reqcmd
@@ -1579,15 +1574,20 @@ noteof2
                 beq     +
     } ;enable_seek = 1
   } ;aligned_read = 1 and (enable_write = 1 or enable_seek = 1)
+  !if aligned_read = 0 {
+                php
+  } ;aligned_read = 0
   !if enable_write = 1 {
                 jsr     seekrdwr
   } else { ;enable_write = 0
                 jsr     seekrd
   } ;enable_write = 1
+  !if aligned_read = 0 {
+                plp
+  } ;aligned_read = 0
 
 resparse
   !if aligned_read = 0 {
-                plp
 +               bcc     +
     !if bounds_check = 1 {
                 dec     blefthi
@@ -1615,7 +1615,7 @@ setaux          sta     CLRAUXRD, x
                 rts
 
   !if allow_sparse = 1 {
-issparse
+issparse        pla
 -               sta     (adrlo), y
                 iny
                 bne     -
@@ -3013,8 +3013,10 @@ hddrdwrloop
   !if read_scrn = 1 {
                 clv
                 bcc     redirect
+    !if (enable_write + enable_seek) > 0 {
                 txa
                 beq     +
+    } ;enable_write = 1 or enable_seek = 1
                 ldy     ldrhi
                 cpy     #8
                 bcs     +
@@ -3023,9 +3025,9 @@ hddrdwrloop
                 pha
                 lda     sizelo
                 pha
-                txa
-                dex
-                stx     sizelo
+                lda     #0
+                sta     sizelo
+                lda     #1
 
 redirect
   } else { ;read_scrn = 0
@@ -3082,9 +3084,6 @@ redirect
     !if aligned_read = 0 {
                 php
     } ;aligned_read = 0
-                lda     #>hdddirbuf
-                sta     adrhi
-                sty     adrlo
   } else { ;rwts_mode = 1
     !if fast_subindex = 0 {
                 ;read whenever block index changes
@@ -3191,6 +3190,8 @@ hddnoteof1
   } ;detect_treof = 1
 
   !if fast_trees = 0 {
+                lda     #>hdddirbuf
+                sta     adrhi
                 jsr     hddseekrd
   } else { ;fast_trees = 1
                 jsr     hddreaddirsel
@@ -3289,34 +3290,27 @@ hddnoteof2
   !if write_sparse = 1 {
                 sta     sparseblk
   } ;write_sparse = 1
-  !if (rwts_mode + enable_write) > 1 {
-                cmp     #1
-  } else { ;rwts_mode = 0 or enable_write = 0
-                tay
-  } ;rwts_mode = 1 and enable_write = 1
-                pla
-  !if rwts_mode = 0 {
-                dey
-                iny ;don't affect carry
-  } else { ;rwts_mode = 1
+  !if rwts_mode = 1 {
     !if enable_write = 1 {
+                cmp     #1
+                pla
                 ldy     reqcmd
                 bcs     hddseekrdwr
 savebyte
                 tay
     } else { ;enable_write = 0
+                tay
+                pla
                 dey
                 iny ;don't affect carry
                 bne     hddseekrd
     } ;enable_write = 1
-  } ;rwts_mode = 0
+  } ;rwts_mode = 1
 } ;allow_sparse = 0
 !if rwts_mode = 0 {
-  !if aligned_read = 0 {
-                php
-  } ;aligned_read = 0
   !if allow_sparse = 1 {
                 beq     hddissparse
+                pla
   } ;allow_sparse = 1
   !if (aligned_read and (enable_write or enable_seek)) = 1 {
                 ldy     reqcmd
@@ -3324,15 +3318,20 @@ savebyte
                 beq     +
     } ;enable_seek = 1
   } ;aligned_read = 1 and (enable_write = 1 or enable_seek = 1)
+  !if aligned_read = 0 {
+                php
+  } ;aligned_read = 0
   !if enable_write = 1 {
                 jsr     hddseekrdwr
   } else { ;enable_write = 0
                 jsr     hddseekrd
   } ;enable_write = 1
+  !if aligned_read = 0 {
+                plp
+  } ;aligned_read = 0
 
 hddresparse
   !if aligned_read = 0 {
-                plp
 +               bcc     +
   } ;aligned_read = 0
                 inc     adrhi
@@ -3362,6 +3361,9 @@ hddsetaux       sta     CLRAUXRD, x
 
 !if allow_sparse = 1 {
 hddissparse
+  !if rwts_mode = 0 {
+                pla
+  } ;rwts_mode = 0
 -               sta     (adrlo), y
                 inc     adrhi
                 sta     (adrlo), y
@@ -3759,7 +3761,7 @@ hdddataend
     } ;reloc
     !if verbose_info = 1 {
       !warn "floppy code: ", reloc, "-", codeend - 1
-      !warn "floppy data: ", codeend, "-", dataend - 1
+      !warn "floppy data: ", bit2tbl, "-", dataend - 1
       !warn "floppy dirbuf: ", dirbuf, "-", dirbuf + $1ff
       !if aligned_read = 0 {
         !warn "floppy encbuf: ", encbuf, "-", encbuf + $1ff
