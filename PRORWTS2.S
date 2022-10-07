@@ -1,6 +1,6 @@
 ;license:BSD-3-Clause
 ;extended open/read/write binary file in ProDOS filesystem, with random access
-;copyright (c) Peter Ferrie 2013-2021
+;copyright (c) Peter Ferrie 2013-2022
 ;assemble using ACME
 
 ver_02 = 1
@@ -347,9 +347,9 @@ skiphdr         clc
                 ;there can be only one page crossed, so we can increment instead of adc
 
                 inc     scratchhi
-+               cmp     #<(readbuff + $1ff) ;4 + ($27 * $0d)
++               cmp     #<(readbuff + NAME_LENGTH + ($27 * $0d))
                 lda     scratchhi
-                sbc     #>(readbuff + $1ff)
+                sbc     #>(readbuff + NAME_LENGTH + ($27 * $0d))
                 bcc     inextent
 
                 ;read next directory block when we reach the end of this block
@@ -722,11 +722,11 @@ unrdrvoff1      lda     MOTOROFF
 ++
 } else { ;enable_floppy = 0
   !ifdef PASS2 {
-    !if >(hddcodeend - reloc) > 0 {
+    !if (hddcodeend - reloc) > $100 {
       !if one_page = 1 {
         !error "one_page must be 0"
       } ;one_page = 0
-      !if >(hddcodeend - reloc) > 1 {
+      !if (hddcodeend - reloc) > $200 {
         !if three_pages = 0 {
           !error "three_pages must be 1"
         } ;three_pages = 0
@@ -786,8 +786,8 @@ unrhddblockhi = *
                 lda     #0
 hddreaddir1     jsr     hddreaddirsel
 
-hddfirstent     lda     #NAME_LENGTH
-                sta     scratchlo
+                lda     #NAME_LENGTH + ENTRY_SIZE
+hddfirstent     sta     scratchlo
                 lda     #>(hdddirbuf - 1)
                 sta     scratchhi
 
@@ -812,14 +812,16 @@ hddnextent      ldy     #0
                 adc     #ENTRY_SIZE
                 sta     scratchlo
                 bcs     hddnextent1
-                cmp     #$ff ;4 + ($27 * $0d)
+                cmp     #<(NAME_LENGTH + ($27 * $0d))
                 bne     hddnextent
 
                 ;read next directory block when we reach the end of this block
 
                 ldx     hdddirbuf + NEXT_BLOCK_LO
                 lda     hdddirbuf + NEXT_BLOCK_HI
-                bcs     hddreaddir1
+                jsr     hddreaddirsec
+                lda     #NAME_LENGTH
+                bne     hddfirstent
 
 hddfoundname    iny
                 lda     (scratchlo), y
@@ -1048,7 +1050,7 @@ unrdrvoff3 = unrelocdsk + (* - reloc)
                 adc     #ENTRY_SIZE
                 sta     scratchlo
                 bcs     nextent1
-                cmp     #$ff ;4 + ($27 * $0d)
+                cmp     #<(NAME_LENGTH + ($27 * $0d))
                 bne     nextent
 
                 ;read next directory block when we reach the end of this block
@@ -1161,6 +1163,7 @@ foundname       iny
       } ;one_shot = 0
     } ;enable_write = 1 or aligned_read = 1
   } ;bounds_check = 1 or return_size = 1 or one_shot = 1
+
                 ;cache AUX_TYPE (load offset for binary files)
 
   !if override_adr = 0 {
@@ -2650,7 +2653,7 @@ hddnextent      ldy     #0
                 adc     #ENTRY_SIZE
                 sta     scratchlo
                 bcs     hddnextent1
-                cmp     #$ff ;4 + ($27 * $0d)
+                cmp     #<(NAME_LENGTH + ($27 * $0d))
                 bne     hddnextent
 
                 ;read next directory block when we reach the end of this block
@@ -2763,6 +2766,7 @@ hddfoundname    iny
       } ;one_shot = 0
     } ;enable_write = 1 or aligned_read = 1
   } ;bounds_check = 1 or return_size = 1 or one_shot = 1
+
                 ;cache AUX_TYPE (load offset for binary files)
 
   !if override_adr = 0 {
@@ -3190,8 +3194,6 @@ hddnoteof1
   } ;detect_treof = 1
 
   !if fast_trees = 0 {
-                lda     #>hdddirbuf
-                sta     adrhi
                 jsr     hddseekrd
   } else { ;fast_trees = 1
                 jsr     hddreaddirsel
@@ -3915,7 +3917,7 @@ hdddataend
     } ;allow_trees
     !warn "hdd driver start: ", unrelochdd - init
     !if (one_page + enable_floppy) = 0 {
-      !if ((hddcodeend - reloc) < $100) {
+      !if ((hddcodeend - reloc) <= $100) {
         !warn "one_page can be enabled, code is small enough"
       } ;hddcodeend
     } ;not one_page and not enable_floppy
